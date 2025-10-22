@@ -1,0 +1,67 @@
+kind: TestWorkflow
+apiVersion: testworkflows.testkube.io/v1
+metadata:
+  name: distributed-artillery-workflow
+spec:
+  config:
+    arrivalRatePerWorker:
+      type: integer
+      default: 2
+    duration:
+      type: string
+      default: 2
+    workers:
+      type: integer
+      default: 2
+  content:
+    git:
+      uri: https://github.com/olensmar/exploratory-loadtesting
+      revision: main
+      paths:
+      - artillery/artillery-smoke-test.yaml
+  container:
+    image: artilleryio/artillery:2.0.20
+    resources:
+      requests:
+        cpu: 128m
+        memory: 256Mi
+  job:
+    activeDeadlineSeconds: 600
+  steps:
+  - name: Run test
+    parallel:
+      count: config.workers
+      transfer:
+      - from: /data/repo
+      fetch:
+      - from: /data/artifacts
+      paused: true
+      run:
+        workingDir: /data/repo/test/artillery
+        shell: 'mkdir -p /data/artifacts && /home/node/artillery/bin/run run artillery-smoke-test.yaml
+          --overrides ''{ "phases": [{ "duration": {{ config.duration }}, "arrivalRate":
+          {{ config.arrivalRatePerWorker }} }] }'' -o /data/artifacts/report-{{ index
+          }}.json'
+      use:
+      - name: distribute/evenly
+      container:
+        image: artilleryio/artillery:2.0.20
+        resources:
+          requests:
+            cpu: 128m
+            memory: 256Mi
+  - name: Generate HTML report
+    workingDir: /data/artifacts
+    shell: mkdir html && for file in *.json; do /home/node/artillery/bin/run report
+      "$file" -o "html/${file%.json}.html"; done
+  - name: Save artifacts
+    condition: always
+    artifacts:
+      workingDir: /data/artifacts
+      paths:
+      - '**/*'
+status:
+  health:
+    passRate: 1
+    flipRate: 0
+    overallHealth: 1

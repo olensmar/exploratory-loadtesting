@@ -1,0 +1,68 @@
+kind: TestWorkflow
+apiVersion: testworkflows.testkube.io/v1
+metadata:
+  name: distributed-jmeter-workflow
+spec:
+  config:
+    nodes:
+      type: integer
+      default: 2
+  content:
+    git:
+      uri: https://github.com/olensmar/exploratory-loadtesting
+      revision: main
+      paths:
+      - jmeter/jmeter-smoke-test.jmx
+  container:
+    workingDir: /data/repo
+    resources:
+      requests:
+        cpu: 512m
+        memory: 300Mi
+  job:
+    activeDeadlineSeconds: 600
+  services:
+    slave:
+      use:
+      - name: distribute/evenly
+      count: config.nodes
+      logs: always
+      timeout: 120s
+      pod:
+        tolerations:
+        - key: kubernetes.io/arch
+          operator: Equal
+          value: arm64
+          effect: NoSchedule
+        - key: kubernetes.io/arch
+          operator: Equal
+          value: amd64
+          effect: NoSchedule
+      image: alpine/jmeter:5.6
+      resources:
+        requests:
+          cpu: 128m
+          memory: 128Mi
+      shell: jmeter-server -Dserver.rmi.localport=60000 -Dserver_port=1099 -Jserver.rmi.ssl.disable=true
+      readinessProbe:
+        tcpSocket:
+          port: 1099
+        periodSeconds: 1
+  steps:
+  - name: Run tests
+    run:
+      image: alpine/jmeter:5.6
+      shell: jmeter -n -X -Jserver.rmi.ssl.disable=true -Jclient.rmi.localport=7000
+        -R {{services.slave.*.ip}} -t jmeter-executor-smoke.jmx -j /data/artifacts/jmeter.log
+        -o /data/artifacts/report -l /data/artifacts/jtl-report.jtl -e
+    steps:
+    - name: Save artifacts
+      workingDir: /data/artifacts
+      artifacts:
+        paths:
+        - '**/*'
+status:
+  health:
+    passRate: 1
+    flipRate: 0
+    overallHealth: 1

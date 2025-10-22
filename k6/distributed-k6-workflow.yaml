@@ -1,0 +1,59 @@
+kind: TestWorkflow
+apiVersion: testworkflows.testkube.io/v1
+metadata:
+  name: distributed-k6-workflow
+spec:
+  config:
+    duration:
+      type: string
+      default: 2s
+    vus:
+      type: integer
+      default: 2
+    workers:
+      type: integer
+      default: 2
+  content:
+    git:
+      uri: https://github.com/olensmar/exploratory-loadtesting
+      revision: main
+      paths:
+      - k6/k6-smoke-test.js
+  container:
+    resources:
+      requests:
+        cpu: 128m
+        memory: 128Mi
+  job:
+    activeDeadlineSeconds: 300
+  steps:
+  - name: Run test
+    parallel:
+      count: config.workers
+      transfer:
+      - from: /data/repo
+      paused: true
+      run:
+        workingDir: /data/repo/test/k6
+        image: grafana/k6:1.1.0
+        env:
+        - name: K6_SYSTEM_ENV
+          value: K6_SYSTEM_ENV_value
+        shell: |
+          k6 run k6-smoke-test.js \
+            -e K6_ENV_FROM_PARAM=K6_ENV_FROM_PARAM_value \
+            --vus {{ shellquote(config.vus) }} \
+            --duration {{ shellquote(config.duration) }} \
+            --execution-segment {{ index }}/{{ count }}:{{ index + 1 }}/{{ count }}
+      use:
+      - name: distribute/evenly
+      container:
+        resources:
+          requests:
+            cpu: 128m
+            memory: 128Mi
+status:
+  health:
+    passRate: 1
+    flipRate: 0
+    overallHealth: 1
