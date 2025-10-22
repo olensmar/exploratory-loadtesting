@@ -37,7 +37,7 @@ spec:
       - from: /data/artifacts
       paused: true
       run:
-        workingDir: /data/repo/test/artillery
+        workingDir: /data/repo/artillery
         shell: 'mkdir -p /data/artifacts && /home/node/artillery/bin/run run artillery-smoke-test.yaml
           --overrides ''{ "phases": [{ "duration": {{ config.duration }}, "arrivalRate":
           {{ config.arrivalRatePerWorker }} }] }'' -o /data/artifacts/report-{{ index

@@ -34,7 +34,7 @@ spec:
       - from: /data/repo
       paused: true
       run:
-        workingDir: /data/repo/test/k6
+        workingDir: /data/repo/k6
         image: grafana/k6:1.1.0
         env:
         - name: K6_SYSTEM_ENV
